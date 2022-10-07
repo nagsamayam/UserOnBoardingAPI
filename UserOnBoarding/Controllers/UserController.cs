@@ -156,7 +156,7 @@ namespace UserOnBoarding.Controllers
         {
             List<Claim> claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, Convert.ToString(user.Email)),
+                new Claim(ClaimTypes.Name, Convert.ToString(user.Id)),
                 new Claim(ClaimTypes.Role, "Admin")
             };
 
