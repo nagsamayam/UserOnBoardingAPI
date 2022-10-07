@@ -1,7 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using UserOnBoarding.Data;
+using UserOnBoarding.Models;
 using UserOnBoarding.Requests;
 
 namespace UserOnBoarding.Controllers
@@ -10,10 +14,12 @@ namespace UserOnBoarding.Controllers
     [ApiController]
     public class UserController : ControllerBase
     {
+        public readonly IConfiguration _configuration;
         public readonly DataContext _context;
 
-        public UserController(DataContext context)
+        public UserController(IConfiguration configuration,DataContext context)
         {
+            _configuration = configuration;
             _context = context;
         }
 
@@ -61,7 +67,12 @@ namespace UserOnBoarding.Controllers
                 return BadRequest("Not verified");
             }
 
-            return Ok($"Welcome back {user.Email}! :)");
+            string token = CreateJwtToken(user);
+
+            return Ok(token);
+
+
+           // return Ok($"Welcome back {user.Email}! :)");
         }
 
         [HttpPost("verify")]
@@ -93,7 +104,7 @@ namespace UserOnBoarding.Controllers
             user.ResetTokenExpires = DateTime.Now.AddDays(1);
             await _context.SaveChangesAsync();
 
-            return Ok("You may now reset your password");
+            return Ok($"You may now reset your password and the password reset token is {user.PasswordResetToken}");
         }
 
         [HttpPost("reset-password")]
@@ -139,6 +150,29 @@ namespace UserOnBoarding.Controllers
         private string CreateRandomToken()
         {
             return Convert.ToHexString(RandomNumberGenerator.GetBytes(64));
+        }
+
+        private string CreateJwtToken(User user)
+        {
+            List<Claim> claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, Convert.ToString(user.Email)),
+                new Claim(ClaimTypes.Role, "Admin")
+            };
+
+            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(
+                _configuration.GetSection("Jwt:Secret").Value));
+
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+
+            var token = new JwtSecurityToken(
+                claims: claims,
+                expires: DateTime.Now.AddDays(1),
+                signingCredentials: creds);
+
+            var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+
+            return jwt;
         }
     }
 }
