@@ -10,23 +10,26 @@ using UserOnBoarding.Dtos;
 using UserOnBoarding.Models;
 using UserOnBoarding.Requests;
 using UserOnBoarding.Responses;
+using UserOnBoarding.Services.MailServices;
 using UserOnBoarding.Services.UserServices;
 
 namespace UserOnBoarding.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class UserController : ControllerBase
+    public class AuthController : ControllerBase
     {
         public readonly IConfiguration _configuration;
         public readonly DataContext _context;
         public readonly IUserService _userService;
+        public readonly IMailService _mailService;
 
-        public UserController(IConfiguration configuration, DataContext context, IUserService userService)
+        public AuthController(IConfiguration configuration, DataContext context, IUserService userService, IMailService mailService)
         {
             _configuration = configuration;
             _context = context;
             _userService = userService;
+            _mailService = mailService;
         }
 
         [HttpPost("register")]
@@ -75,10 +78,11 @@ namespace UserOnBoarding.Controllers
 
             string token = CreateJwtToken(user);
 
-            return Ok(token);
-
-
-            // return Ok($"Welcome back {user.Email}! :)");
+            return Ok(new {
+                token,
+                id = user.Id,
+                message = $"Welcome back {user.Email}! :)"
+            });
         }
 
         [HttpPost("verify")]
@@ -144,6 +148,13 @@ namespace UserOnBoarding.Controllers
             return Ok(response);
         }
 
+        [HttpPost("send-mail")]
+        public IActionResult SendMail(MailDto request)
+        {
+           _mailService.SendMail(request);
+
+            return Ok(new {Message = "Mail sent"});
+        }
 
         private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
         {
