@@ -1,12 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using UserOnBoarding.Data;
+using UserOnBoarding.Dtos;
 using UserOnBoarding.Models;
 using UserOnBoarding.Requests;
+using UserOnBoarding.Responses;
+using UserOnBoarding.Services.UserServices;
 
 namespace UserOnBoarding.Controllers
 {
@@ -16,17 +20,19 @@ namespace UserOnBoarding.Controllers
     {
         public readonly IConfiguration _configuration;
         public readonly DataContext _context;
+        public readonly IUserService _userService;
 
-        public UserController(IConfiguration configuration,DataContext context)
+        public UserController(IConfiguration configuration, DataContext context, IUserService userService)
         {
             _configuration = configuration;
             _context = context;
+            _userService = userService;
         }
 
         [HttpPost("register")]
         public async Task<ActionResult<User>> Register(UserRegisterRequest request)
         {
-            if(await _context.Users.AnyAsync(u => u.Email == request.Email))
+            if (await _context.Users.AnyAsync(u => u.Email == request.Email))
             {
                 return BadRequest("User already exists");
             }
@@ -42,7 +48,7 @@ namespace UserOnBoarding.Controllers
                 VerificationToken = CreateRandomToken(),
             };
 
-             _context.Users.Add(user);
+            _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
             return Ok("User successfully created");
@@ -52,17 +58,17 @@ namespace UserOnBoarding.Controllers
         public async Task<ActionResult<string>> Login(UserLoginRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
-            if(user == null)
+            if (user == null)
             {
                 return NotFound("User not found");
             }
 
-            if(!VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
+            if (!VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
             {
                 return BadRequest("Invalid credentials");
             }
 
-            if(user.VerifiedAt == null)
+            if (user.VerifiedAt == null)
             {
                 return BadRequest("Not verified");
             }
@@ -72,14 +78,14 @@ namespace UserOnBoarding.Controllers
             return Ok(token);
 
 
-           // return Ok($"Welcome back {user.Email}! :)");
+            // return Ok($"Welcome back {user.Email}! :)");
         }
 
         [HttpPost("verify")]
         public async Task<ActionResult> Verify(string token)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.VerificationToken == token);
-            if(user == null)
+            if (user == null)
             {
                 return NotFound("Invalid token");
             }
@@ -90,12 +96,12 @@ namespace UserOnBoarding.Controllers
 
             return Ok("User verified!");
         }
-        
+
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword(string email)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if(user == null)
+            if (user == null)
             {
                 return NotFound("No user associated with this Email");
             }
@@ -111,7 +117,7 @@ namespace UserOnBoarding.Controllers
         public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.PasswordResetToken == request.Token);
-            if(user == null || user.ResetTokenExpires < DateTime.Now)
+            if (user == null || user.ResetTokenExpires < DateTime.Now)
             {
                 return NotFound("Invalid Token");
             }
@@ -126,6 +132,18 @@ namespace UserOnBoarding.Controllers
 
             return Ok("Your password updated successfully");
         }
+
+        [HttpGet("auth-user"), Authorize]
+        public async Task<ActionResult<UserResourceResponse<UserResponseDto>>> GetAuthUser() {
+            var response = await _userService.GetAuthUser();
+            if(response.Data == null)
+            {
+                return NotFound("User Not found");
+            }
+            
+            return Ok(response);
+        }
+
 
         private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
         {
