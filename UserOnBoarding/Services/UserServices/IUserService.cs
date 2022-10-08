@@ -7,5 +7,7 @@ namespace UserOnBoarding.Services.UserServices
     {
         int GetAuthId();
         Task<UserResourceResponse<UserResponseDto>> GetAuthUser();
+
+        Task<UserCollectionResponse<User>> GetAllUsers(int page);
     }
 }
